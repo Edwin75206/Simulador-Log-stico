@@ -1,4 +1,4 @@
-import { BarChart3, Map, PackageSearch, Route, Truck } from "lucide-react";
+import { BarChart3, Map, MapPin, PackageSearch, Route, Truck } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 export default function Navbar() {
@@ -14,6 +14,9 @@ export default function Navbar() {
       <nav className="nav-links">
         <NavLink to="/">
           <BarChart3 size={18} /> Dashboard
+        </NavLink>
+        <NavLink to="/puntos-logisticos">
+          <MapPin size={18} /> Puntos logísticos
         </NavLink>
         <NavLink to="/rutas">
           <Route size={18} /> Rutas

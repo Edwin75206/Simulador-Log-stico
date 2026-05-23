@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models.ruta import Ruta
@@ -10,12 +10,22 @@ router = APIRouter(prefix="/rutas", tags=["Rutas"])
 
 @router.get("", response_model=list[RutaOut])
 def listar_rutas(db: Session = Depends(get_db)):
-    return db.query(Ruta).order_by(Ruta.id.desc()).all()
+    return (
+        db.query(Ruta)
+        .options(joinedload(Ruta.punto_origen), joinedload(Ruta.punto_destino))
+        .order_by(Ruta.id.desc())
+        .all()
+    )
 
 
 @router.get("/{ruta_id}", response_model=RutaOut)
 def obtener_ruta(ruta_id: int, db: Session = Depends(get_db)):
-    ruta = db.get(Ruta, ruta_id)
+    ruta = (
+        db.query(Ruta)
+        .options(joinedload(Ruta.punto_origen), joinedload(Ruta.punto_destino))
+        .filter(Ruta.id == ruta_id)
+        .first()
+    )
     if not ruta:
         raise HTTPException(status_code=404, detail="Ruta no encontrada")
     return ruta

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -15,6 +16,8 @@ class ResultadoOut(BaseModel):
     tiempo_estimado_horas: float
     puntaje_riesgo: float
     consumo_total: float
+    costo_combustible: Optional[float] = None
+    casetas_ajustadas: Optional[float] = None
     puntaje_total: float
     recomendado: bool
     created_at: datetime

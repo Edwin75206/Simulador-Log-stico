@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import rutas, simulaciones, transportes
+from app.routers import puntos_logisticos, rutas, simulaciones, transportes
 
 app = FastAPI(
     title="Simulador Logístico Multimodal",
@@ -24,5 +24,6 @@ def health_check():
 
 
 app.include_router(rutas.router, prefix="/api")
+app.include_router(puntos_logisticos.router, prefix="/api")
 app.include_router(transportes.router, prefix="/api")
 app.include_router(simulaciones.router, prefix="/api")

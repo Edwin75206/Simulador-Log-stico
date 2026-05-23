@@ -2,7 +2,7 @@ import { Play } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { getRutas } from "../api/rutasApi";
+import { getPuntosLogisticos } from "../api/puntosLogisticosApi";
 import { createSimulacion } from "../api/simulacionesApi";
 
 const today = new Date().toISOString().slice(0, 10);
@@ -13,23 +13,24 @@ export default function NuevaSimulacion() {
     origen: "",
     destino: "",
     peso_kg: 1000,
-    tipo_mercancia: "Mercancia general",
+    tipo_mercancia: "mixta",
     prioridad: "equilibrada",
     fecha: today,
   });
-  const [rutas, setRutas] = useState([]);
+  const [puntos, setPuntos] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loadingRutas, setLoadingRutas] = useState(true);
+  const [loadingPuntos, setLoadingPuntos] = useState(true);
 
   useEffect(() => {
-    getRutas()
+    getPuntosLogisticos()
       .then((response) => {
-        const rutasActivas = response.data.filter((ruta) => ruta.activa);
-        setRutas(rutasActivas);
+        const puntosActivos = response.data.filter((punto) => punto.activo);
+        setPuntos(puntosActivos);
 
-        const primerOrigen = getLugares(rutasActivas)[0] || "";
-        const primerDestino = getDestinosConectados(rutasActivas, primerOrigen)[0] || "";
+        const opciones = getOpcionesPuntos(puntosActivos);
+        const primerOrigen = opciones[0]?.value || "";
+        const primerDestino = opciones.find((punto) => punto.value !== primerOrigen)?.value || "";
 
         setForm((prev) => ({
           ...prev,
@@ -37,18 +38,18 @@ export default function NuevaSimulacion() {
           destino: primerDestino,
         }));
       })
-      .catch(() => setError("No se pudieron cargar las rutas disponibles."))
-      .finally(() => setLoadingRutas(false));
+      .catch(() => setError("No se pudieron cargar los puntos logísticos disponibles."))
+      .finally(() => setLoadingPuntos(false));
   }, []);
 
   const origenes = useMemo(
-    () => getLugares(rutas),
-    [rutas]
+    () => getOpcionesPuntos(puntos),
+    [puntos]
   );
 
   const destinos = useMemo(
-    () => getDestinosConectados(rutas, form.origen),
-    [rutas, form.origen]
+    () => origenes.filter((punto) => punto.value !== form.origen),
+    [origenes, form.origen]
   );
 
   const handleChange = (event) => {
@@ -61,19 +62,23 @@ export default function NuevaSimulacion() {
 
   const handleOrigenChange = (event) => {
     const nuevoOrigen = event.target.value;
-    const primerDestino = getDestinosConectados(rutas, nuevoOrigen)[0] || "";
+    const destinoActualDisponible = destinos.some((destino) => destino.value === form.destino);
+    const primerDestino = origenes.find((punto) => punto.value !== nuevoOrigen)?.value || "";
 
     setForm((prev) => ({
       ...prev,
       origen: nuevoOrigen,
-      destino: primerDestino,
+      destino:
+        destinoActualDisponible && prev.destino !== nuevoOrigen
+          ? prev.destino
+          : primerDestino,
     }));
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!form.origen || !form.destino) {
-      setError("Selecciona origen y destino antes de ejecutar la simulación.");
+    if (!form.origen || !form.destino || form.origen === form.destino) {
+      setError("Selecciona dos puntos logísticos distintos antes de ejecutar la simulación.");
       return;
     }
 
@@ -99,9 +104,9 @@ export default function NuevaSimulacion() {
       </div>
 
       {error && <div className="alert danger">{error}</div>}
-      {!loadingRutas && rutas.length === 0 && (
+      {!loadingPuntos && puntos.length === 0 && (
         <div className="alert">
-          No hay rutas disponibles. Primero agrega rutas en el catálogo.
+          No hay puntos logísticos disponibles. Primero agrega puntos al catálogo.
         </div>
       )}
 
@@ -113,20 +118,20 @@ export default function NuevaSimulacion() {
               name="origen"
               value={form.origen}
               onChange={handleOrigenChange}
-              disabled={loadingRutas || origenes.length === 0}
+              disabled={loadingPuntos || origenes.length === 0}
               required
             >
               <option value="">
-                {loadingRutas ? "Cargando orígenes..." : "Selecciona un origen"}
+                {loadingPuntos ? "Cargando orígenes..." : "Selecciona un origen"}
               </option>
               {origenes.map((origen) => (
-                <option key={origen} value={origen}>
-                  {origen}
+                <option key={origen.value} value={origen.value}>
+                  {origen.label}
                 </option>
               ))}
             </select>
             <span className="help-text">
-              Selecciona un origen registrado en el catálogo de rutas.
+              Puedes seleccionar cualquier punto logístico registrado como origen.
             </span>
           </label>
           <label className="field">
@@ -144,25 +149,33 @@ export default function NuevaSimulacion() {
                   : "Selecciona un destino"}
               </option>
               {destinos.map((destino) => (
-                <option key={destino} value={destino}>
-                  {destino}
+                <option key={destino.value} value={destino.value}>
+                  {destino.label}
                 </option>
               ))}
             </select>
             <span className="help-text">
-              Los destinos disponibles dependen del origen seleccionado.
+              Elige cualquier otro punto logístico; no puede ser igual al origen.
             </span>
             {form.origen && destinos.length === 0 && (
               <span className="field-warning">No hay destinos disponibles para este origen.</span>
             )}
           </label>
+          <p className="help-text full">
+            Puedes seleccionar cualquier punto logístico registrado como origen y cualquier otro
+            como destino. El sistema generará o usará una ruta simulada entre ambos.
+          </p>
           <label>
             Peso kg
             <input name="peso_kg" type="number" min="0.01" step="0.01" value={form.peso_kg} onChange={handleChange} required />
           </label>
           <label>
             Tipo de mercancía
-            <input name="tipo_mercancia" value={form.tipo_mercancia} onChange={handleChange} required />
+            <select name="tipo_mercancia" value={form.tipo_mercancia} onChange={handleChange} required>
+              <option value="mixta">Mixta</option>
+              <option value="perecedera">Perecedera</option>
+              <option value="no_perecedera">No perecedera</option>
+            </select>
           </label>
           <label>
             Prioridad
@@ -182,7 +195,7 @@ export default function NuevaSimulacion() {
             <button
               className="primary-button"
               type="submit"
-              disabled={loading || !form.origen || !form.destino}
+              disabled={loading || !form.origen || !form.destino || form.origen === form.destino}
             >
               <Play size={18} /> {loading ? "Calculando..." : "Ejecutar simulación"}
             </button>
@@ -194,21 +207,19 @@ export default function NuevaSimulacion() {
 }
 
 function getUniqueValues(values) {
-  return [...new Set(values.filter(Boolean))];
+  const seen = new Set();
+  return values.filter((item) => {
+    if (!item?.value || seen.has(item.value)) return false;
+    seen.add(item.value);
+    return true;
+  });
 }
 
-function getLugares(rutas) {
-  return getUniqueValues(rutas.flatMap((ruta) => [ruta.origen, ruta.destino]));
-}
-
-function getDestinosConectados(rutas, origenSeleccionado) {
-  if (!origenSeleccionado) return [];
-
+function getOpcionesPuntos(puntos) {
   return getUniqueValues(
-    rutas.flatMap((ruta) => {
-      if (ruta.origen === origenSeleccionado) return [ruta.destino];
-      if (ruta.destino === origenSeleccionado) return [ruta.origen];
-      return [];
-    })
+    puntos.map((punto) => ({
+      value: punto.nombre,
+      label: `${punto.nombre} - ${punto.ciudad}, ${punto.estado}`,
+    }))
   );
 }

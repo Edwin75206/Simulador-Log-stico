@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -17,6 +18,8 @@ class ResultadoSimulacion(Base):
     tiempo_estimado_horas: Mapped[float] = mapped_column(Float, nullable=False)
     puntaje_riesgo: Mapped[float] = mapped_column(Float, nullable=False)
     consumo_total: Mapped[float] = mapped_column(Float, nullable=False)
+    costo_combustible: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    casetas_ajustadas: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     puntaje_total: Mapped[float] = mapped_column(Float, nullable=False)
     recomendado: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

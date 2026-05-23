@@ -38,10 +38,15 @@ def crear_simulacion(payload: SimulacionCreate, db: Session = Depends(get_db)):
         .filter(Transporte.activo.is_(True), Transporte.capacidad_kg >= payload.peso_kg)
         .all()
     )
+    transportes = [
+        transporte
+        for transporte in transportes
+        if _es_compatible_con_mercancia(transporte, payload.tipo_mercancia)
+    ]
     if not transportes:
         raise HTTPException(
             status_code=400,
-            detail="No hay transportes activos con capacidad suficiente",
+            detail="No hay transportes activos compatibles con capacidad suficiente",
         )
 
     simulacion = Simulacion(**payload.model_dump())
@@ -67,6 +72,12 @@ def obtener_simulacion(simulacion_id: int, db: Session = Depends(get_db)):
         db.query(Simulacion)
         .options(
             joinedload(Simulacion.resultados).joinedload(ResultadoSimulacion.ruta),
+            joinedload(Simulacion.resultados)
+            .joinedload(ResultadoSimulacion.ruta)
+            .joinedload(Ruta.punto_origen),
+            joinedload(Simulacion.resultados)
+            .joinedload(ResultadoSimulacion.ruta)
+            .joinedload(Ruta.punto_destino),
             joinedload(Simulacion.resultados).joinedload(ResultadoSimulacion.transporte),
         )
         .filter(Simulacion.id == simulacion_id)
@@ -88,9 +99,38 @@ def listar_resultados(simulacion_id: int, db: Session = Depends(get_db)):
         db.query(ResultadoSimulacion)
         .options(
             joinedload(ResultadoSimulacion.ruta),
+            joinedload(ResultadoSimulacion.ruta).joinedload(Ruta.punto_origen),
+            joinedload(ResultadoSimulacion.ruta).joinedload(Ruta.punto_destino),
             joinedload(ResultadoSimulacion.transporte),
         )
         .filter(ResultadoSimulacion.simulacion_id == simulacion_id)
         .order_by(ResultadoSimulacion.recomendado.desc(), ResultadoSimulacion.puntaje_total.asc())
         .all()
     )
+
+
+@router.delete("/{simulacion_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_simulacion(simulacion_id: int, db: Session = Depends(get_db)):
+    simulacion = db.get(Simulacion, simulacion_id)
+    if not simulacion:
+        raise HTTPException(status_code=404, detail="Simulación no encontrada")
+
+    db.query(ResultadoSimulacion).filter(
+        ResultadoSimulacion.simulacion_id == simulacion_id
+    ).delete(synchronize_session=False)
+    db.delete(simulacion)
+    db.commit()
+    return None
+
+
+def _es_compatible_con_mercancia(transporte: Transporte, tipo_mercancia: str) -> bool:
+    tipo = (tipo_mercancia or "").strip().lower()
+    tipo_transporte = (transporte.tipo_mercancia or "").strip().lower()
+
+    if tipo in {"mixta", "mixto"}:
+        return True
+    if tipo == "perecedera":
+        return tipo_transporte in {"perecedera", "mixta", ""}
+    if tipo == "no_perecedera":
+        return tipo_transporte in {"no_perecedera", "mixta", ""}
+    return True

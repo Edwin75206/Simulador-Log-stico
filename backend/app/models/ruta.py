@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -13,6 +14,12 @@ class Ruta(Base):
     nombre: Mapped[str] = mapped_column(String(120), nullable=False)
     origen: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     destino: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    origen_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("puntos_logisticos.id"), nullable=True
+    )
+    destino_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("puntos_logisticos.id"), nullable=True
+    )
     distancia_km: Mapped[float] = mapped_column(Float, nullable=False)
     casetas: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     trafico: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -26,3 +33,9 @@ class Ruta(Base):
     )
 
     resultados = relationship("ResultadoSimulacion", back_populates="ruta")
+    punto_origen = relationship(
+        "PuntoLogistico", foreign_keys=[origen_id], back_populates="rutas_origen"
+    )
+    punto_destino = relationship(
+        "PuntoLogistico", foreign_keys=[destino_id], back_populates="rutas_destino"
+    )

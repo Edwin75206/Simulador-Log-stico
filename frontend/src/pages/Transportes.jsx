@@ -8,10 +8,16 @@ import {
   updateTransporte,
 } from "../api/transportesApi";
 import DataTable from "../components/DataTable";
+import { formatSubcategoria } from "../utils/formatters";
 
 const initialForm = {
   nombre: "",
   tipo: "terrestre",
+  categoria: "terrestre",
+  subcategoria: "",
+  tipo_mercancia: "mixta",
+  refrigerado: false,
+  combustible: "diesel",
   costo_km: 1,
   velocidad_promedio: 1,
   capacidad_kg: 1,
@@ -19,6 +25,11 @@ const initialForm = {
   mantenimiento: 0,
   costo_operativo: 0,
   consumo_por_km: 0,
+  rendimiento_km_litro: 1,
+  factor_caseta: 1,
+  costo_combustible_litro: 25,
+  descripcion: "",
+  uso_recomendado: "",
   activo: true,
 };
 
@@ -30,6 +41,9 @@ const numericFields = new Set([
   "mantenimiento",
   "costo_operativo",
   "consumo_por_km",
+  "rendimiento_km_litro",
+  "factor_caseta",
+  "costo_combustible_litro",
 ]);
 
 const securityOptions = [
@@ -54,9 +68,14 @@ export default function Transportes() {
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
+    const parsedValue = type === "checkbox" ? checked : numericFields.has(name) ? Number(value) : value;
     setForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : numericFields.has(name) ? Number(value) : value,
+      [name]: parsedValue,
+      ...(name === "categoria" ? { tipo: parsedValue } : {}),
+      ...(name === "rendimiento_km_litro" && Number(value) > 0
+        ? { consumo_por_km: Number((1 / Number(value)).toFixed(4)) }
+        : {}),
     }));
   };
 
@@ -82,6 +101,11 @@ export default function Transportes() {
     setForm({
       nombre: transporte.nombre,
       tipo: transporte.tipo,
+      categoria: transporte.categoria || transporte.tipo,
+      subcategoria: transporte.subcategoria || "",
+      tipo_mercancia: transporte.tipo_mercancia || "mixta",
+      refrigerado: Boolean(transporte.refrigerado),
+      combustible: transporte.combustible || "diesel",
       costo_km: transporte.costo_km,
       velocidad_promedio: transporte.velocidad_promedio,
       capacidad_kg: transporte.capacidad_kg,
@@ -89,6 +113,11 @@ export default function Transportes() {
       mantenimiento: transporte.mantenimiento,
       costo_operativo: transporte.costo_operativo,
       consumo_por_km: transporte.consumo_por_km,
+      rendimiento_km_litro: transporte.rendimiento_km_litro || 1,
+      factor_caseta: transporte.factor_caseta ?? 1,
+      costo_combustible_litro: transporte.costo_combustible_litro ?? 25,
+      descripcion: transporte.descripcion || "",
+      uso_recomendado: transporte.uso_recomendado || "",
       activo: transporte.activo,
     });
   };
@@ -100,11 +129,17 @@ export default function Transportes() {
 
   const columns = [
     { key: "nombre", label: "Nombre" },
-    { key: "tipo", label: "Tipo" },
-    { key: "costo_km", label: "Costo/km" },
-    { key: "velocidad_promedio", label: "Velocidad" },
+    { key: "categoria", label: "Categoría", render: (row) => row.categoria || row.tipo },
+    {
+      key: "subcategoria",
+      label: "Modelo / configuración",
+      render: (row) => formatSubcategoria(row.subcategoria, row.nombre),
+    },
+    { key: "tipo_mercancia", label: "Mercancía" },
+    { key: "refrigerado", label: "Refrigerado", render: (row) => (row.refrigerado ? "Sí" : "No") },
     { key: "capacidad_kg", label: "Capacidad kg" },
-    { key: "seguridad", label: "Seguridad" },
+    { key: "rendimiento_km_litro", label: "Rendimiento km/l" },
+    { key: "factor_caseta", label: "Factor caseta" },
     { key: "activo", label: "Estado", render: (row) => (row.activo ? "Activo" : "Inactivo") },
     {
       key: "acciones",
@@ -143,8 +178,8 @@ export default function Transportes() {
               <input name="nombre" value={form.nombre} onChange={handleChange} required />
             </label>
             <label className="field">
-              Tipo de transporte
-              <select name="tipo" value={form.tipo} onChange={handleChange}>
+              Categoría
+              <select name="categoria" value={form.categoria} onChange={handleChange}>
                 <option value="terrestre">Terrestre</option>
                 <option value="ferroviario">Ferroviario</option>
                 <option value="aereo">Aéreo</option>
@@ -152,8 +187,36 @@ export default function Transportes() {
               </select>
             </label>
             <label className="field">
+              Subcategoría
+              <input name="subcategoria" value={form.subcategoria} onChange={handleChange} placeholder="trailer_refrigerado" required />
+            </label>
+            <label className="field">
+              Tipo de mercancía
+              <select name="tipo_mercancia" value={form.tipo_mercancia} onChange={handleChange}>
+                <option value="perecedera">Perecedera</option>
+                <option value="no_perecedera">No perecedera</option>
+                <option value="mixta">Mixta</option>
+              </select>
+            </label>
+            <label className="checkbox-field">
+              <input name="refrigerado" type="checkbox" checked={form.refrigerado} onChange={handleChange} />
+              Refrigerado
+            </label>
+            <label className="checkbox-field">
+              <input name="activo" type="checkbox" checked={form.activo} onChange={handleChange} />
+              Transporte activo
+            </label>
+          </div>
+
+          <div className="form-section">
+            <h3>Capacidad y velocidad</h3>
+            <label className="field">
               Capacidad máxima en kg
               <input name="capacidad_kg" type="number" min="0.01" step="0.01" value={form.capacidad_kg} onChange={handleChange} required />
+            </label>
+            <label className="field">
+              Velocidad promedio km/h
+              <input name="velocidad_promedio" type="number" min="0.01" step="0.01" value={form.velocidad_promedio} onChange={handleChange} required />
             </label>
             <label className="field scale-field">
               Nivel de seguridad
@@ -168,21 +231,40 @@ export default function Transportes() {
                 1 = Baja seguridad, 2 = Seguridad regular, 3 = Seguridad media, 4 = Seguridad alta, 5 = Seguridad muy alta
               </span>
             </label>
-            <label className="checkbox-field">
-              <input name="activo" type="checkbox" checked={form.activo} onChange={handleChange} />
-              Transporte activo
+          </div>
+
+          <div className="form-section">
+            <h3>Consumo y combustible</h3>
+            <label className="field">
+              Combustible
+              <select name="combustible" value={form.combustible} onChange={handleChange}>
+                <option value="gasolina">Gasolina</option>
+                <option value="diesel">Diésel</option>
+                <option value="turbosina">Turbosina</option>
+                <option value="combustoleo">Combustóleo</option>
+                <option value="electrico">Eléctrico</option>
+                <option value="mixto">Mixto</option>
+              </select>
+            </label>
+            <label className="field">
+              Rendimiento km/l
+              <input name="rendimiento_km_litro" type="number" min="0.01" step="0.01" value={form.rendimiento_km_litro} onChange={handleChange} required />
+            </label>
+            <label className="field">
+              Consumo por kilómetro
+              <input name="consumo_por_km" type="number" min="0" step="0.0001" value={form.consumo_por_km} onChange={handleChange} required />
+            </label>
+            <label className="field">
+              Costo combustible por litro
+              <input name="costo_combustible_litro" type="number" min="0" step="0.01" value={form.costo_combustible_litro} onChange={handleChange} required />
             </label>
           </div>
 
           <div className="form-section">
-            <h3>Costos y rendimiento</h3>
+            <h3>Costos</h3>
             <label className="field">
-              Costo por kilómetro
+              Costo por kilómetro fallback
               <input name="costo_km" type="number" min="0.01" step="0.01" value={form.costo_km} onChange={handleChange} required />
-            </label>
-            <label className="field">
-              Velocidad promedio km/h
-              <input name="velocidad_promedio" type="number" min="0.01" step="0.01" value={form.velocidad_promedio} onChange={handleChange} required />
             </label>
             <label className="field">
               Costo de mantenimiento
@@ -193,8 +275,20 @@ export default function Transportes() {
               <input name="costo_operativo" type="number" min="0" step="0.01" value={form.costo_operativo} onChange={handleChange} required />
             </label>
             <label className="field">
-              Consumo por kilómetro
-              <input name="consumo_por_km" type="number" min="0" step="0.01" value={form.consumo_por_km} onChange={handleChange} required />
+              Factor caseta
+              <input name="factor_caseta" type="number" min="0" step="0.01" value={form.factor_caseta} onChange={handleChange} required />
+            </label>
+          </div>
+
+          <div className="form-section">
+            <h3>Uso recomendado</h3>
+            <label className="field wide-field">
+              Descripción
+              <textarea name="descripcion" value={form.descripcion} onChange={handleChange} rows="3" />
+            </label>
+            <label className="field wide-field">
+              Uso recomendado
+              <textarea name="uso_recomendado" value={form.uso_recomendado} onChange={handleChange} rows="3" required />
             </label>
           </div>
 

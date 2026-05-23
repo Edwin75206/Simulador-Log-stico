@@ -23,7 +23,8 @@ def obtener_transporte(transporte_id: int, db: Session = Depends(get_db)):
 
 @router.post("", response_model=TransporteOut, status_code=status.HTTP_201_CREATED)
 def crear_transporte(payload: TransporteCreate, db: Session = Depends(get_db)):
-    transporte = Transporte(**payload.model_dump())
+    data = _normalizar_payload(payload.model_dump())
+    transporte = Transporte(**data)
     db.add(transporte)
     db.commit()
     db.refresh(transporte)
@@ -38,7 +39,7 @@ def actualizar_transporte(
     if not transporte:
         raise HTTPException(status_code=404, detail="Transporte no encontrado")
 
-    for campo, valor in payload.model_dump().items():
+    for campo, valor in _normalizar_payload(payload.model_dump()).items():
         setattr(transporte, campo, valor)
 
     db.commit()
@@ -54,3 +55,11 @@ def eliminar_transporte(transporte_id: int, db: Session = Depends(get_db)):
     transporte.activo = False
     db.commit()
     return None
+
+
+def _normalizar_payload(data: dict) -> dict:
+    if data.get("categoria"):
+        data["tipo"] = data["categoria"]
+    if data.get("rendimiento_km_litro") and data["rendimiento_km_litro"] > 0:
+        data["consumo_por_km"] = round(1 / data["rendimiento_km_litro"], 4)
+    return data

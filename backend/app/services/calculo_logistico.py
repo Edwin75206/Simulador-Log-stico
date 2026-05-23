@@ -1,5 +1,6 @@
 from app.models.ruta import Ruta
 from app.models.transporte import Transporte
+from app.services.casetas_service import obtener_casetas_estimadas
 
 
 FACTORES_TRAFICO = {
@@ -22,12 +23,27 @@ def calcular_resultados(rutas: list[Ruta], transportes: list[Transporte], priori
 
     for ruta in rutas:
         for transporte in transportes:
-            costo_total = (
-                (ruta.distancia_km * transporte.costo_km)
-                + ruta.casetas
-                + transporte.mantenimiento
-                + transporte.costo_operativo
-            )
+            consumo_por_km = _resolver_consumo_por_km(transporte)
+            consumo_total = ruta.distancia_km * consumo_por_km
+            costo_combustible = None
+            casetas_ajustadas = _calcular_casetas_ajustadas(ruta, transporte)
+
+            if _usa_formula_combustible(transporte, consumo_por_km):
+                costo_combustible = consumo_total * transporte.costo_combustible_litro
+                costo_total = (
+                    costo_combustible
+                    + casetas_ajustadas
+                    + transporte.mantenimiento
+                    + transporte.costo_operativo
+                )
+            else:
+                costo_total = (
+                    (ruta.distancia_km * transporte.costo_km)
+                    + casetas_ajustadas
+                    + transporte.mantenimiento
+                    + transporte.costo_operativo
+                )
+
             tiempo_base = ruta.distancia_km / transporte.velocidad_promedio
             tiempo_estimado = tiempo_base * FACTORES_TRAFICO[ruta.trafico]
             riesgo_ruta = (
@@ -35,7 +51,6 @@ def calcular_resultados(rutas: list[Ruta], transportes: list[Transporte], priori
             ) / 4
             riesgo_transporte = 6 - transporte.seguridad
             puntaje_riesgo = (riesgo_ruta + riesgo_transporte) / 2
-            consumo_total = ruta.distancia_km * transporte.consumo_por_km
 
             resultados.append(
                 {
@@ -45,6 +60,12 @@ def calcular_resultados(rutas: list[Ruta], transportes: list[Transporte], priori
                     "tiempo_estimado_horas": round(tiempo_estimado, 2),
                     "puntaje_riesgo": round(puntaje_riesgo, 2),
                     "consumo_total": round(consumo_total, 2),
+                    "costo_combustible": (
+                        round(costo_combustible, 2) if costo_combustible is not None else None
+                    ),
+                    "casetas_ajustadas": (
+                        round(casetas_ajustadas, 2) if casetas_ajustadas is not None else None
+                    ),
                     "puntaje_total": 0,
                     "recomendado": False,
                 }
@@ -105,3 +126,40 @@ def _seleccionar_recomendado(resultados: list[dict], prioridad: str) -> int:
     }[prioridad]
 
     return min(range(len(resultados)), key=lambda i: resultados[i][criterio])
+
+
+def _resolver_consumo_por_km(transporte: Transporte) -> float:
+    if transporte.consumo_por_km and transporte.consumo_por_km > 0:
+        return transporte.consumo_por_km
+    if transporte.rendimiento_km_litro and transporte.rendimiento_km_litro > 0:
+        return 1 / transporte.rendimiento_km_litro
+    return 0
+
+
+def _usa_formula_combustible(transporte: Transporte, consumo_por_km: float) -> bool:
+    return bool(
+        consumo_por_km > 0
+        and transporte.costo_combustible_litro is not None
+    )
+
+
+def _calcular_casetas_ajustadas(ruta: Ruta, transporte: Transporte) -> float:
+    if not _es_terrestre(transporte):
+        return 0
+
+    casetas_base = obtener_casetas_estimadas(
+        ruta.origen,
+        ruta.destino,
+        ruta.distancia_km,
+        transporte,
+        casetas_ruta=ruta.casetas,
+    )
+    factor_caseta = transporte.factor_caseta
+    if factor_caseta is None:
+        factor_caseta = 1
+    return casetas_base * factor_caseta
+
+
+def _es_terrestre(transporte: Transporte) -> bool:
+    categoria = (transporte.categoria or transporte.tipo or "").strip().lower()
+    return categoria == "terrestre"
